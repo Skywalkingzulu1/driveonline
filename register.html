@@ -1,147 +1,61 @@
-@import url('https://fonts.googleapis.com/css?family=Josefin+Sans&display=swap');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Drive Online</title>
+	<link rel="stylesheet" href="style.css">
+	<script src="https://kit.fontawesome.com/b99e675b6e.js"></script>
+</head>
+<body>
 
-*{
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  list-style: none;
-  text-decoration: none;
-  font-family: 'Josefin Sans', sans-serif;
-}
+<div class="wrapper">
+    <div class="sidebar">
+        <h2>Menu</h2>
+        <ul>
+            <li><a href="index.html"><i class="fas fa-home"></i>Home</a></li>
+            <li><a href="about.html"><i class="fas fa-user"></i>About</a></li>
+            <li><a href="Register.html"><i class="fas fa-address-card"></i>Register</a></li>
+            <li><a href="login.html"><i class="fas fa-blog"></i>Login</a></li>
+            <li><a href="contact.html"><i class="fas fa-address-book"></i>Contact</a></li>
+            
+        </ul> 
+        <div class="social_media">
+          <a href="#"><i class="fab fa-facebook-f"></i></a>
+          <a href="#"><i class="fab fa-twitter"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+      </div>
+    </div>
+    <div class="main_content">
+        <div class="header">Drive Online.</div>  
+       
+<div class="registration-form">
+	    <h1>Register</h1>
+    <form name="contact" method="POST" data-netlify="true">
+        <input type="hidden" name="form-name" value="contact" />
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required>
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required>
+        <label for="message">Message:</label>
+        <textarea id="message" name="message" rows="4" required></textarea>
+        <label for="role">Select your role:</label>
+        <input type="checkbox" id="company" name="role" value="company">
+        <label for="company">Company</label>
+        <input type="checkbox" id="driver" name="role" value="driver">
+        <label for="driver">Driver</label>
+        <button type="submit">Submit</button>
+    </form>
+	
 
-body{
-   background-color: #f3f5f9;
-}
-
-.wrapper{
-  display: flex;
-  position: relative;
-}
-
-.wrapper .sidebar{
-  width: 200px;
-  height: 100%;
-  background: #4b4276;
-  padding: 30px 0px;
-  position: fixed;
-}
-
-.wrapper .sidebar h2{
-  color: #fff;
-  text-transform: uppercase;
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.wrapper .sidebar ul li{
-  padding: 15px;
-  border-bottom: 1px solid #bdb8d7;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-  border-top: 1px solid rgba(255,255,255,0.05);
-}    
-
-.wrapper .sidebar ul li a{
-  color: #bdb8d7;
-  display: block;
-}
-
-.wrapper .sidebar ul li a .fas{
-  width: 25px;
-}
-
-.wrapper .sidebar ul li:hover{
-  background-color: #594f8d;
-}
-    
-.wrapper .sidebar ul li:hover a{
-  color: #fff;
-}
- 
-.wrapper .sidebar .social_media{
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-}
-
-.wrapper .sidebar .social_media a{
-  display: block;
-  width: 40px;
-  background: #594f8d;
-  height: 40px;
-  line-height: 45px;
-  text-align: center;
-  margin: 0 5px;
-  color: #bdb8d7;
-  border-top-left-radius: 5px;
-  border-top-right-radius: 5px;
-}
-
-.wrapper .main_content{
-  width: 100%;
-  margin-left: 200px;
-}
-
-.wrapper .main_content .header{
-  padding: 20px;
-  background: #fff;
-  color: #717171;
-  border-bottom: 1px solid #e0e4e8;
-}
-
-.wrapper .main_content .info{
-  margin: 20px;
-  color: #717171;
-  line-height: 25px;
-}
-
-.wrapper .main_content .info div{
-  margin-bottom: 20px;
-}
-
-.registration-form {
-    max-width: 400px;
-    margin: 0 auto;
-    padding: 20px;
-    background-color: #fff;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.registration-form h1 {
-    font-size: 24px;
-    margin-bottom: 20px;
-}
-
-.registration-form label {
-    display: block;
-    margin-bottom: 10px;
-    font-weight: bold;
-}
-
-.registration-form input,
-.registration-form textarea {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 20px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-}
-
-.registration-form button {
-    background-color: #594f8d;
-    color: #fff;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.registration-form button:hover {
-    background-color: #4b4276;
-}
+</div>
 
 
+<!--         <div>You</div>
+          <div>Can Drive</div>
+          <div>Online</div> -->
+     
+    </div>
+</div>
 
+</body>
+</html>

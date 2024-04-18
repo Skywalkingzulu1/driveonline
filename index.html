@@ -28,12 +28,113 @@
     <div class="main_content">
         <div class="header">Drive Online.</div>  
         <div class="info">
-<!--         <div>You</div>
-          <div>Can Drive</div>
-          <div>Online</div> -->
+ <!-- Main Content -->
+    <div class="main-content">
+        <h1>Welcome to Drive Online Dashboard</h1>
+        <div class="job-posts">
+            <!-- Job posts for companies hiring drivers -->
+            <div class="job-post">
+                <h2>Driver </h2>
+                <p>Location: Pietermaritzburg, South Africa</p>
+                <!-- Other job details -->
+            </div>
+            <div class="job-listings">
+    <!-- Job Listing 1 -->
+    <div class="job-listing">
+        <h2>Truck Driver</h2>
+        <p>Company: Manline</p>
+        <p>Location: Pietermaritzburg, KZN</p>
+        <p>Salary Range: R30,000 - R40,000</p>
+        <button class="apply-btn">Apply Now</button>
+        <button class="details-btn" onclick="showDetails()">View Details</button>
+    </div>
+    
+    <!-- Job Listing 2 -->
+    <div class="job-listing">
+        <h2>Courier Driver</h2>
+        <p>Company: FedEx</p>
+        <p>Location: Pietermaritzburg, GP</p>
+        <p>Salary Range: R25,000 - R35,000</p>
+        <button class="apply-btn">Apply Now</button>
+        <button class="details-btn" onclick="showDetails()">View Details</button>
+    </div>
+    
+    <!-- Add more job listings as needed -->
+</div>
+
+<!-- Pop-Up Details -->
+<div class="pop-up-details" id="pop-up-details">
+    <div class="pop-up-content">
+        <h2>Local Truck driver</h2>
+        <p>Company: Albany</p>
+        <p>Location: Pietermaritzburg, KZN</p>
+        <p>Salary Range: R30,000 - R40,000</p>
+        <h3>Job Details:</h3>
+        <p>Responsibilities: Lorem ipsum dolor sit amet...</p>
+        <p>Requirements: Lorem ipsum dolor sit amet...</p>
+        <p>Date Posted: April 15, 2024</p>
+        <button class="apply-btn">Apply Now</button>
+        <button class="close-btn" onclick="hideDetails()">Close</button>
+    </div>
+</div>
+
+       
+        </div>
+    </div>
       </div>
     </div>
 </div>
+
+<script type="text/javascript">
+	
+	document.addEventListener('DOMContentLoaded', (event) => {
+// Function to show pop-up details
+function showDetails(jobTitle, company, location, salary, responsibilities, requirements, datePosted) {
+    var popUpDetails = document.getElementById("pop-up-details");
+    var popUpContent = document.querySelector(".pop-up-content");
+
+    // Update pop-up content with job details
+    popUpContent.innerHTML = `
+        <h2>${jobTitle}</h2>
+        <p>Company: ${company}</p>
+        <p>Location: ${location}</p>
+        <p>Salary Range: ${salary}</p>
+        <h3>Job Details:</h3>
+        <p>Responsibilities: ${responsibilities}</p>
+        <p>Requirements: ${requirements}</p>
+        <p>Date Posted: ${datePosted}</p>
+        <button class="apply-btn">Apply Now</button>
+        <button class="close-btn" onclick="hideDetails()">Close</button>
+    `;
+
+    // Show pop-up details
+    popUpDetails.style.display = "block";
+}
+
+// Function to hide pop-up details
+function hideDetails() {
+    var popUpDetails = document.getElementById("pop-up-details");
+    popUpDetails.style.display = "none";
+}
+
+// Add event listener to "View Details" buttons
+document.querySelectorAll(".details-btn").forEach((button, index) => {
+    button.addEventListener("click", function() {
+        var jobListing = document.querySelectorAll(".job-listing")[index];
+        var jobTitle = jobListing.querySelector("h2").innerText;
+        var company = jobListing.querySelectorAll("p")[0].innerText.split(": ")[1];
+        var location = jobListing.querySelectorAll("p")[1].innerText.split(": ")[1];
+        var salary = jobListing.querySelectorAll("p")[2].innerText.split(": ")[1];
+        var responsibilities = "Lorem ipsum dolor sit amet...";
+        var requirements = "Lorem ipsum dolor sit amet...";
+        var datePosted = "April 15, 2024";
+
+        showDetails(jobTitle, company, location, salary, responsibilities, requirements, datePosted);
+    });
+});
+
+});
+</script>
 
 </body>
 </html>

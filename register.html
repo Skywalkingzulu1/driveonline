@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<title>Drive Online</title>
-	<link rel="stylesheet" href="style.css">
-	<script src="https://kit.fontawesome.com/b99e675b6e.js"></script>
+    <meta charset="UTF-8">
+    <title>Drive Online</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://kit.fontawesome.com/b99e675b6e.js"></script>
 </head>
 <body>
-
+<!-- 
+     style="background-image: url('open.jpg'); background-size: 100% 100%; background-position: center; background-repeat: no-repeat; height: 100%;  This makes sure that the html and body tags take up the full screen height 
+    margin: 0;
+    padding: 0;"*/
+-->
 <div class="wrapper">
     <div class="sidebar">
         <h2>Menu</h2>
@@ -17,45 +21,214 @@
             <li><a href="Register.html"><i class="fas fa-address-card"></i>Register</a></li>
             <li><a href="login.html"><i class="fas fa-blog"></i>Login</a></li>
             <li><a href="contact.html"><i class="fas fa-address-book"></i>Contact</a></li>
-            
         </ul> 
         <div class="social_media">
-          <a href="#"><i class="fab fa-facebook-f"></i></a>
-          <a href="#"><i class="fab fa-twitter"></i></a>
-          <a href="#"><i class="fab fa-instagram"></i></a>
-      </div>
+            <a href="#"><i class="fab fa-facebook-f"></i></a>
+            <a href="#"><i class="fab fa-twitter"></i></a>
+            <a href="#"><i class="fab fa-instagram"></i></a>
+        </div>
     </div>
     <div class="main_content">
         <div class="header">Drive Online.</div>  
-       
-<div class="registration-form">
-	    <h1>Register</h1>
-    <form name="contact" method="POST" data-netlify="true">
-        <input type="hidden" name="form-name" value="contact" />
-        <label for="name">Name:</label>
-        <input type="text" id="name" name="name" required>
-        <label for="email">Email:</label>
-        <input type="email" id="email" name="email" required>
-        <label for="message">Message:</label>
-        <textarea id="message" name="message" rows="4" required></textarea>
-        <label for="role">Select your role:</label>
-        <input type="checkbox" id="company" name="role" value="company">
-        <label for="company">Company</label>
-        <input type="checkbox" id="driver" name="role" value="driver">
-        <label for="driver">Driver</label>
-        <button type="submit">Submit</button>
-    </form>
-	
-
-</div>
-
-
-<!--         <div>You</div>
-          <div>Can Drive</div>
-          <div>Online</div> -->
-     
+        <div class="info">
+            <!-- Main Content -->
+            <div class="main-content">
+                <h1>Welcome to Drive Online Dashboard</h1>
+                <div class="job-listings-container" id="job-listings-container"></div>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+
+
+    // Job listings JSON data (Add your job listings data here)
+    const jobListings = [
+    {
+        "title": "Driver (VIP Protection)",
+        "location": "Pretoria",
+        "description": "Seeking a competent, professional, and trustworthy driver with prior VIP protection experience, PSIRA registration, and firearm competency. Responsible for transporting and protecting VIP personnel within the country. Valid driver's license required, PDP beneficial.",
+        "posted": "16 hours ago"
+    },
+    {
+        "title": "Driver",
+        "location": "Kuils River",
+        "description": "Requires a Code 10 Driver's License. Interested candidates should send their CV with Driver's License and Dangerous Goods Certificate.",
+        "posted": "1 day ago"
+    },
+    {
+        "title": "Driver",
+        "location": "Woodstock",
+        "description": "Looking for an experienced Driver focused on safe and reliable transportation. Requirements include a valid South African driver's license, good communication and problem-solving skills.",
+        "posted": "1 day ago"
+    },
+    {
+        "title": "DGP Driver",
+        "location": "Pretoria West",
+        "description": "Seeking a reliable driver with a valid DGP license. Requires a C1 driver's license.",
+        "posted": "1 week ago"
+    },
+    {
+        "title": "Driver/Logistics",
+        "location": "Alberton",
+        "description": "Leading security firm seeks a driver for logistical duties.",
+        "posted": "2 weeks ago"
+    },
+    {
+        "title": "RT drivers with A+M",
+        "location": "Clayville",
+        "description": "Large company seeking RT drivers with A+M license. Candidates can send CVs to provided emails.",
+        "posted": "1 week ago"
+    },
+    {
+        "title": "Professional Driver",
+        "location": "Durban North",
+        "description": "Fixed-term full-time position available.",
+        "posted": "1 day ago"
+    },
+    {
+        "title": "ADMIN/DRIVER",
+        "location": "Woodstock",
+        "description": "Seeking a young male for an admin/driver role in Woodstock CPT area.",
+        "posted": "2 weeks ago"
+    },
+    {
+        "title": "Driver (Code 10 with PDP)",
+        "location": "Germiston",
+        "description": "Seeking a code 10 driver with a valid PDP.",
+        "posted": "20 hours ago"
+    },
+    {
+        "title": "Code 10 Drivers",
+        "location": "Johannesburg - North (Sandton / Midrand / Diepsloot)",
+        "description": "Company based in Kyasands, Randburg, looking for Code 10 drivers with PDP to join their team.",
+        "posted": "1 day ago"
+    },
+    {
+        "title": "FORKLIFT DRIVER / SALES ASSISTANT",
+        "location": "Durban",
+        "description": "Role involves assisting with receiving, dispatching, and controlling stock. Forklift operation and sales support.",
+        "posted": "6 days ago"
+    },
+    {
+        "title": "Driver Code 14",
+        "location": "Centurion",
+        "description": "Requires proven working experience as a delivery driver and a valid Code 14 driver's license with permit.",
+        "posted": "1 day ago"
+    },
+    {
+        "title": "Code 14 Driver",
+        "location": "Strand",
+        "description": "Established manufacturer seeking experienced Code 14 driver with sober habits, preferably with crane truck experience.",
+        "posted": "1 day ago"
+    },
+    {
+        "title": "Code 10 Driver",
+        "location": "Ballito",
+        "description": "Driver position available.",
+        "posted": "2 days ago"
+    },
+    {
+        "title": "EXPERIENCED DRIVERS (CODE 10, 14 & FORKLIFT)",
+        "location": "Port Elizabeth",
+        "description": "Requires Driver's License with PDP.",
+        "posted": "2 days ago"
+    },
+    {
+        "title": "CODE 10 WITH PDP DELIVERY DRIVER",
+        "location": "Cape Town",
+        "description": "Requires valid Code 8/10 driver's license and PDP.",
+        "posted": "3 days ago"
+    },
+    {
+        "title": "Code 8 Delivery Driver",
+        "location": "Cape Town",
+        "description": "Requires valid Code 8/10 driver's license and PDP.",
+        "posted": "3 days ago"
+    },
+    {
+        "title": "Code 14 Long Distance Truck Driver",
+        "location": "Sasolburg",
+        "description": "Seeking a young male residing in Vaal/Sasolburg area with 2-5 years of experience as a Long Distance Code 14 Driver.",
+        "posted": "6 days ago"
+    },
+    {
+        "title": "Driver Trainer",
+        "location": "Delareyville",
+        "description": "Responsible for training, re-training, skilling, and upskilling drivers. Certification as Driver Trainer required.",
+        "posted": "2 days ago"
+    },
+    {
+        "title": "Test Driver",
+        "location": "Uitenhage",
+        "description": "Requires a valid unendorsed driver's license B Code 8. Advanced driver test and medical examination required.",
+        "posted": "1 day ago"
+    },
+    {
+        "title": "Code 10 Driver",
+        "location": "Gqeberha, South Africa",
+        "description": "Position available for CODE 8 / 10 / 14 MOTOR VEHICLE DRIVER. Requires valid driver's license and preferably without suspension.",
+        "posted": "3 days ago"
+    },
+    {
+        "title": "BUS DRIVER SKILLS PROGRAMME",
+        "location": "Cape Town",
+        "description": "Requires valid code EC(14) driver's licence with PrDP.",
+        "posted": "1 week ago"
+    },
+    {
+        "title": "Code 10 Driver",
+        "location": "Pinetown, KZN",
+        "description": "Driver with own personal vehicle required. Code 10 License necessary.",
+        "posted": "1 week ago"
+    },
+    {
+        "title": "Code 14 Driver",
+        "location": "CPT - CBD",
+        "description": "Responsibilities include mapping out driving routes, loading/unloading cargo, and complying with truck rules and regulations. Requires Matric Certificate or higher and Code 14 License with valid PDP.",
+        "posted": "3 days ago"
+    },
+    {
+        "title": "Forklift Driver",
+        "location": "Prospecton",
+        "description": "Minimum of 3 years' experience required in an automotive industry.",
+        "posted": "17 hours ago"
+    }
+]
+;
+
+    // Function to generate HTML for job listings
+    function generateJobListingHTML(jobListing, index) {
+        return `
+            <div class="job-listing">
+                <h2>${jobListing.title}</h2>
+                <p>Location: ${jobListing.location}</p>
+                <p>Description: ${jobListing.description}</p>
+                <p>Posted: ${jobListing.posted}</p>
+            <button class="apply-btn" onclick="applyNow(${index})">Apply Now</button>
+            </div>
+        `;
+    }
+
+    // Function to display job listings
+    function displayJobListings() {
+        const jobListingsContainer = document.getElementById('job-listings-container');
+        let jobListingsHTML = '';
+
+        jobListings.forEach(jobListing => {
+            jobListingsHTML += generateJobListingHTML(jobListing);
+        });
+
+        jobListingsContainer.innerHTML = jobListingsHTML;
+    }
+
+   
+
+
+    // Call the function to display job listings
+    displayJobListings();
+</script>
 
 </body>
 </html>

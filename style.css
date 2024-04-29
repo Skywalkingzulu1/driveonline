@@ -92,7 +92,7 @@ body{
 
 .wrapper .main_content .info{
   margin: 20px;
-  color: #717171;
+  color: #4b4276;
   line-height: 25px;
 }
 
@@ -183,4 +183,19 @@ body{
 
 .close-btn {
     margin-top: 10px;
+}
+
+.checkbox-group {
+    margin-bottom: 10px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+.checkbox-group label {
+    display: inline-block;
+    vertical-align: middle;
 }

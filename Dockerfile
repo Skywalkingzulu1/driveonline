@@ -1,19 +1,17 @@
-# Use the official lightweight Python image.
+# Use official lightweight Python image
 FROM python:3.11-slim
 
-# Set working directory.
+# Set working directory
 WORKDIR /app
 
-# Install Python dependencies.
-COPY requirements.txt .
+# Copy project files into the container
+COPY . /app
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code.
-COPY . .
+# Expose the default HTTP port
+EXPOSE 8000
 
-# Expose the port the app will run on.
-EXPOSE 80
-
-# Use Python's built‑in HTTP server to serve the static files.
-# This is sufficient for a simple static site.
-CMD ["python", "-m", "http.server", "80"]
+# Serve the static site using Python's built‑in HTTP server
+CMD ["python", "-m", "http.server", "8000"]

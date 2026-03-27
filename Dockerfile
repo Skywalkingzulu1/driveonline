@@ -1,49 +1,39 @@
-# ---------- Builder Stage ----------
-# Use an official lightweight Python image for building dependencies
-FROM python:3.12-slim AS builder
+# Use an official lightweight Python image.
+FROM python:3.11-slim
 
-# Set working directory
+# Set environment variables for Python.
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Create a working directory.
 WORKDIR /app
 
-# Install build dependencies (if any) and system packages needed for bcrypt
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential && \
-    rm -rf /var/lib/apt/lists/*
+# Install system dependencies needed for building some Python packages.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first to leverage Docker cache
+# Install Python dependencies.
 COPY requirements.txt .
-
-# Install Python dependencies without caching to keep image small
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application source code
-COPY app.py .
-COPY index.html .
-COPY style.css .
+# Copy the application code.
+COPY . .
 
-# ---------- Production Runtime Stage ----------
-FROM python:3.12-slim AS runtime
+# Create a non‑root user to run the app.
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -d /app appuser && \
+    chown -R appuser:appuser /app
 
-# Set environment variables for production
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
-
-# Create a non‑root user to run the application
-RUN useradd --create-home appuser && \
-    mkdir /app && chown appuser:appuser /app
-
-WORKDIR /app
-
-# Copy the built application from the builder stage
-COPY --from=builder /app /app
-
-# Switch to non‑root user
+# Switch to the non‑root user.
 USER appuser
 
-# Expose the port that uvicorn will listen on (default 80 for production)
-EXPOSE 80
+# Set default environment variables (can be overridden at runtime).
+ENV HOST=0.0.0.0
+ENV PORT=8000
 
-# Command to run the FastAPI app with uvicorn in production mode
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80", "--workers", "2"]
+# Expose the port the app runs on.
+EXPOSE 8000
+
+# Use Gunicorn with Uvicorn workers for production‑ready serving.
+CMD ["gunicorn", "app:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--log-level", "info"]

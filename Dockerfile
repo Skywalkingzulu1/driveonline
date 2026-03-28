@@ -1,38 +1,36 @@
 # Use an official lightweight Python image.
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# Set environment variables.
-# Prevent Python from writing .pyc files and buffering stdout/stderr.
+# Set environment variables for Python.
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Create a non-root user to run the application.
-RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser
+# Create a non‑root user to run the app.
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-# Set the working directory.
+# Set work directory.
 WORKDIR /app
 
-# Install system dependencies required for building some Python packages.
-# (e.g., gcc for building bcrypt, etc.)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies.
+# Install system dependencies (if any) and then Python dependencies.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application source code.
+# Copy the rest of the application code.
 COPY . .
 
-# Change ownership to the non-root user.
-RUN chown -R appuser:appuser /app
+# Change ownership to the non‑root user.
+RUN chown -R appuser:appgroup /app
 
-# Switch to the non-root user.
+# Switch to non‑root user.
 USER appuser
 
-# Expose the port that uvicorn will run on.
-EXPOSE 8000
+# Expose the default Flask port.
+EXPOSE 5000
 
-# Command to run the FastAPI application with uvicorn.
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Set Flask environment variables.
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_RUN_PORT=5000
+
+# Default command to run the Flask development server.
+CMD ["flask", "run"]

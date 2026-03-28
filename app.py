@@ -3,7 +3,7 @@ import datetime
 from functools import wraps
 
 import jwt
-from flask import Flask, request, jsonify, redirect, url_for
+from flask import Flask, request, jsonify, redirect, url_for, render_template_string
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -90,80 +90,38 @@ def load_user(user_id):
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
-def hash_password(plain_password: str) -> bytes:
-    """Hash a plain password using Flask‑Bcrypt."""
-    return bcrypt.generate_password_hash(plain_password)
+def send_confirmation_email(to_email):
+    """Generate a token and send a confirmation email."""
+    token = serializer.dumps(to_email, salt="email-confirm")
+    confirm_url = url_for("confirm_email", token=token, _external=True)
+    html_body = render_template_string(
+        """
+        <p>Hello,</p>
+        <p>Thank you for registering. Please click the link below to verify your email address:</p>
+        <p><a href="{{ confirm_url }}">{{ confirm_url }}</a></p>
+        <p>If you did not sign up, you can ignore this email.</p>
+        """,
+        confirm_url=confirm_url,
+    )
+    msg = Message(
+        subject="Please confirm your email",
+        recipients=[to_email],
+        html=html_body,
+    )
+    mail.send(msg)
 
 
-def check_password(hashed: bytes, plain_password: str) -> bool:
-    """Verify a password against its hash."""
-    return bcrypt.check_password_hash(hashed, plain_password)
+def token_required(f):
+    """Decorator to protect routes that require a verified email."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for("login"))
+        if not getattr(current_user, "is_verified", False):
+            return jsonify({"error": "Email not verified"}), 403
+        return f(*args, **kwargs)
 
-
-def generate_jwt(user: User) -> str:
-    """Create a JWT token containing user email and role."""
-    payload = {
-        "sub": user.email,
-        "role": user.role,
-        "exp": datetime.datetime.utcnow()
-        + datetime.timedelta(seconds=app.config["JWT_EXP_DELTA_SECONDS"]),
-        "iat": datetime.datetime.utcnow(),
-    }
-    token = jwt.encode(payload, app.config["JWT_SECRET_KEY"], algorithm=app.config["JWT_ALGORITHM"])
-    # PyJWT returns str in >=2.0, bytes in older versions – ensure str
-    if isinstance(token, bytes):
-        token = token.decode("utf-8")
-    return token
-
-
-def decode_jwt(token: str):
-    """Decode and verify a JWT token."""
-    try:
-        payload = jwt.decode(
-            token,
-            app.config["JWT_SECRET_KEY"],
-            algorithms=[app.config["JWT_ALGORITHM"]],
-        )
-        return payload
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-
-
-def role_required(required_role):
-    """Decorator to enforce role‑based access on a view."""
-
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            # Prefer JWT token if supplied
-            auth_header = request.headers.get("Authorization", "")
-            token = None
-            if auth_header.startswith("Bearer "):
-                token = auth_header.split(" ", 1)[1]
-
-            if token:
-                payload = decode_jwt(token)
-                if not payload:
-                    return jsonify({"msg": "Invalid or expired token"}), 401
-                if payload.get("role") != required_role:
-                    return jsonify({"msg": "Insufficient permissions"}), 403
-                # Attach user info to request context if needed
-                request.user_email = payload.get("sub")
-                request.user_role = payload.get("role")
-                return f(*args, **kwargs)
-
-            # Fallback to Flask‑Login session
-            if not current_user.is_authenticated:
-                return redirect(url_for("login"))
-            if getattr(current_user, "role", None) != required_role:
-                return jsonify({"msg": "Insufficient permissions"}), 403
-            return f(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
+    return decorated_function
 
 
 # ---------------------------------------------------------------------------
@@ -172,137 +130,108 @@ def role_required(required_role):
 @app.route("/register", methods=["POST"])
 def register():
     """
-    Expected JSON:
+    Expected JSON payload:
     {
-        "email": "...",
-        "password": "...",
-        "full_name": "...",
-        "role": "admin" (optional, defaults to "user")
+        "email": "user@example.com",
+        "password": "plain-text-password",
+        "full_name": "John Doe"
     }
     """
     data = request.get_json()
     if not data:
-        return jsonify({"msg": "Missing JSON body"}), 400
+        return jsonify({"error": "Invalid JSON payload"}), 400
 
     email = data.get("email")
     password = data.get("password")
     full_name = data.get("full_name", "")
-    role = data.get("role", "user")
 
     if not email or not password:
-        return jsonify({"msg": "Email and password are required"}), 400
+        return jsonify({"error": "Email and password are required"}), 400
 
     if email in users_db:
-        return jsonify({"msg": "User already exists"}), 400
+        return jsonify({"error": "User already exists"}), 400
 
-    hashed = hash_password(password)
+    hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
     users_db[email] = {
-        "hashed_password": hashed,
+        "hashed_password": hashed_pw,
         "full_name": full_name,
-        "is_verified": True,  # In a real app, you'd send a verification email
-        "role": role,
+        "is_verified": False,
+        "role": "user",
     }
 
-    # Auto‑login after registration
-    user = User(email)
-    login_user(user)
+    # Send verification email
+    try:
+        send_confirmation_email(email)
+    except Exception as e:
+        # In a real app you would log this
+        return jsonify({"error": f"Failed to send verification email: {str(e)}"}), 500
 
-    token = generate_jwt(user)
-    return jsonify({"msg": "Registration successful", "token": token}), 201
+    return jsonify({"message": "User registered. Please check your email to verify your account."}), 201
+
+
+@app.route("/confirm/<token>")
+def confirm_email(token):
+    try:
+        email = serializer.loads(token, salt="email-confirm", max_age=3600)
+    except SignatureExpired:
+        return jsonify({"error": "The confirmation link has expired."}), 400
+    except BadSignature:
+        return jsonify({"error": "Invalid confirmation token."}), 400
+
+    user_record = users_db.get(email)
+    if not user_record:
+        return jsonify({"error": "User not found."}), 404
+
+    if user_record.get("is_verified"):
+        return jsonify({"message": "Account already verified."}), 200
+
+    user_record["is_verified"] = True
+    return jsonify({"message": "Email verified successfully. You can now log in."}), 200
 
 
 @app.route("/login", methods=["POST"])
 def login():
     """
-    Expected JSON:
+    Expected JSON payload:
     {
-        "email": "...",
-        "password": "..."
+        "email": "user@example.com",
+        "password": "plain-text-password"
     }
     """
     data = request.get_json()
     if not data:
-        return jsonify({"msg": "Missing JSON body"}), 400
+        return jsonify({"error": "Invalid JSON payload"}), 400
 
     email = data.get("email")
     password = data.get("password")
-    if not email or not password:
-        return jsonify({"msg": "Email and password required"}), 400
 
     user_record = users_db.get(email)
     if not user_record:
-        return jsonify({"msg": "Invalid credentials"}), 401
+        return jsonify({"error": "Invalid credentials"}), 401
 
-    if not check_password(user_record["hashed_password"], password):
-        return jsonify({"msg": "Invalid credentials"}), 401
+    if not bcrypt.check_password_hash(user_record["hashed_password"], password):
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    if not user_record.get("is_verified", False):
+        return jsonify({"error": "Email not verified"}), 403
 
     user = User(email)
     login_user(user)
-
-    token = generate_jwt(user)
-    return jsonify({"msg": "Login successful", "token": token}), 200
+    return jsonify({"message": "Logged in successfully"}), 200
 
 
-@app.route("/logout", methods=["POST"])
+@app.route("/protected")
+@token_required
+def protected_route():
+    return jsonify({"message": f"Hello, {current_user.full_name}. This is a protected route."})
+
+
+@app.route("/logout")
 @login_required
 def logout():
     logout_user()
-    return jsonify({"msg": "Logged out"}), 200
+    return jsonify({"message": "Logged out successfully"})
 
 
-@app.route("/protected", methods=["GET"])
-@login_required
-def protected():
-    """A simple protected endpoint accessible to any logged‑in user."""
-    return jsonify(
-        {
-            "msg": f"Hello, {current_user.full_name or current_user.email}! You are authenticated.",
-            "email": current_user.email,
-            "role": current_user.role,
-        }
-    ), 200
-
-
-@app.route("/admin", methods=["GET"])
-@role_required("admin")
-def admin_panel():
-    """Endpoint only accessible to users with the 'admin' role."""
-    return jsonify(
-        {
-            "msg": f"Welcome to the admin panel, {current_user.full_name or current_user.email}.",
-            "email": current_user.email,
-            "role": current_user.role,
-        }
-    ), 200
-
-
-# ---------------------------------------------------------------------------
-# Example email verification (placeholder)
-# ---------------------------------------------------------------------------
-def send_verification_email(email):
-    token = serializer.dumps(email, salt="email-verify")
-    verify_url = url_for("verify_email", token=token, _external=True)
-    msg = Message("Verify your email", recipients=[email])
-    msg.body = f"Please click the link to verify your email: {verify_url}"
-    mail.send(msg)
-
-
-@app.route("/verify/<token>")
-def verify_email(token):
-    try:
-        email = serializer.loads(token, salt="email-verify", max_age=3600)
-    except (SignatureExpired, BadSignature):
-        return jsonify({"msg": "Invalid or expired verification link"}), 400
-
-    user = users_db.get(email)
-    if user:
-        user["is_verified"] = True
-        return jsonify({"msg": "Email verified successfully"}), 200
-    return jsonify({"msg": "User not found"}), 404
-
-
-# ---------------------------------------------------------------------------
-# Run the app (development only)
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True)

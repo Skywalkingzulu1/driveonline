@@ -1,36 +1,27 @@
-# Use an official lightweight Python image.
 FROM python:3.11-slim
 
-# Set environment variables for Python.
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Create a non‑root user to run the app.
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-
-# Set work directory.
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies (if any) and then Python dependencies.
-COPY requirements.txt .
+# Install system dependencies (if any) and clean up
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python packages
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code.
-COPY . .
+# Copy application source code
+COPY . ./
 
-# Change ownership to the non‑root user.
-RUN chown -R appuser:appgroup /app
-
-# Switch to non‑root user.
-USER appuser
-
-# Expose the default Flask port.
-EXPOSE 5000
-
-# Set Flask environment variables.
+# Set environment variables for Flask
 ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=5000
 
-# Default command to run the Flask development server.
-CMD ["flask", "run"]
+# Expose the Flask default port
+EXPOSE 5000
+
+# Use gunicorn as the production server
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]

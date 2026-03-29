@@ -1,42 +1,34 @@
 # Use the official lightweight Python image.
 FROM python:3.12-slim
 
-# Set environment variables.
+# Prevent Python from writing .pyc files and enable unbuffered output.
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create a non-root user to run the app.
-RUN useradd -m appuser
+# Set a working directory inside the container.
 WORKDIR /app
 
-# Copy only requirements first to leverage Docker cache.
+# Install any system dependencies needed for building Python packages.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy only the requirements file first to leverage Docker cache.
 COPY requirements.txt .
 
-# Install Python dependencies.
+# Upgrade pip and install Python dependencies.
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install -r requirements.txt && \
+    pip install gunicorn
 
 # Copy the rest of the application code.
 COPY . .
 
-# Change ownership to the non-root user.
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user.
-USER appuser
-
 # Expose the default Flask port.
 EXPOSE 5000
 
-# Set Flask environment variables (optional, can be overridden at runtime).
+# Environment variables for Flask.
 ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
-ENV FLASK_RUN_PORT=5000
 
-# Use Flask's built-in server for simplicity. In production, replace with a WSGI server like gunicorn.
-CMD ["flask", "run"]
+# Use Gunicorn as the production WSGI server.
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]

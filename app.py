@@ -1,5 +1,6 @@
 import os
 import datetime
+import re
 from functools import wraps
 
 import jwt
@@ -90,42 +91,24 @@ def load_user(user_id):
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
-def send_confirmation_email(to_email):
-    """Generate a token and send a confirmation email."""
-    token = serializer.dumps(to_email, salt="email-confirm")
-    confirm_url = url_for("confirm_email", token=token, _external=True)
-    html_body = render_template_string(
-        """
-        <p>Hello,</p>
-        <p>Thank you for registering. Please click the link below to verify your email address:</p>
-        <p><a href="{{ confirm_url }}">{{ confirm_url }}</a></p>
-        <p>If you did not sign up, you can ignore this email.</p>
-        """,
-        confirm_url=confirm_url,
-    )
-    msg = Message(
-        subject="Please confirm your email",
-        recipients=[to_email],
-        html=html_body,
-    )
-    mail.send(msg)
+def validate_email(email: str) -> bool:
+    """Simple regex based email validation."""
+    email_regex = r"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    return re.match(email_regex, email) is not None
 
 
-def token_required(f):
-    """Decorator to protect routes that require a verified email."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return redirect(url_for("login"))
-        if not getattr(current_user, "is_verified", False):
-            return jsonify({"error": "Email not verified"}), 403
-        return f(*args, **kwargs)
+def validate_password(password: str) -> bool:
+    """Enforce a minimum password length."""
+    return len(password) >= 8
 
-    return decorated_function
+
+def validate_full_name(name: str) -> bool:
+    """Full name must be non‑empty and reasonably short."""
+    return bool(name.strip()) and len(name.strip()) <= 100
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Registration endpoint
 # ---------------------------------------------------------------------------
 @app.route("/register", methods=["POST"])
 def register():
@@ -133,25 +116,35 @@ def register():
     Expected JSON payload:
     {
         "email": "user@example.com",
-        "password": "plain-text-password",
+        "password": "strongpassword",
         "full_name": "John Doe"
     }
     """
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON payload"}), 400
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
+    full_name = data.get("full_name", "").strip()
 
-    email = data.get("email")
-    password = data.get("password")
-    full_name = data.get("full_name", "")
-
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
+    # Input validation
+    if not email or not validate_email(email):
+        return jsonify({"error": "Invalid or missing email address"}), 400
+    if not password or not validate_password(password):
+        return (
+            jsonify(
+                {"error": "Password must be at least 8 characters long"}
+            ),
+            400,
+        )
+    if not full_name or not validate_full_name(full_name):
+        return jsonify({"error": "Invalid full name"}), 400
 
     if email in users_db:
         return jsonify({"error": "User already exists"}), 400
 
-    hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
+    # Secure password hashing
+    hashed_pw = bcrypt.generate_password_hash(password)
+
+    # Store user
     users_db[email] = {
         "hashed_password": hashed_pw,
         "full_name": full_name,
@@ -159,51 +152,29 @@ def register():
         "role": "user",
     }
 
-    # Send verification email
-    try:
-        send_confirmation_email(email)
-    except Exception as e:
-        # In a real app you would log this
-        return jsonify({"error": f"Failed to send verification email: {str(e)}"}), 500
+    # (Optional) Send verification email here using `mail` and `serializer`
 
-    return jsonify({"message": "User registered. Please check your email to verify your account."}), 201
+    return jsonify({"message": "User registered successfully"}), 201
 
 
-@app.route("/confirm/<token>")
-def confirm_email(token):
-    try:
-        email = serializer.loads(token, salt="email-confirm", max_age=3600)
-    except SignatureExpired:
-        return jsonify({"error": "The confirmation link has expired."}), 400
-    except BadSignature:
-        return jsonify({"error": "Invalid confirmation token."}), 400
-
-    user_record = users_db.get(email)
-    if not user_record:
-        return jsonify({"error": "User not found."}), 404
-
-    if user_record.get("is_verified"):
-        return jsonify({"message": "Account already verified."}), 200
-
-    user_record["is_verified"] = True
-    return jsonify({"message": "Email verified successfully. You can now log in."}), 200
-
-
+# ---------------------------------------------------------------------------
+# Login endpoint
+# ---------------------------------------------------------------------------
 @app.route("/login", methods=["POST"])
 def login():
     """
     Expected JSON payload:
     {
         "email": "user@example.com",
-        "password": "plain-text-password"
+        "password": "strongpassword"
     }
     """
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON payload"}), 400
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
 
-    email = data.get("email")
-    password = data.get("password")
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
 
     user_record = users_db.get(email)
     if not user_record:
@@ -212,26 +183,39 @@ def login():
     if not bcrypt.check_password_hash(user_record["hashed_password"], password):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    if not user_record.get("is_verified", False):
-        return jsonify({"error": "Email not verified"}), 403
-
     user = User(email)
     login_user(user)
+
     return jsonify({"message": "Logged in successfully"}), 200
 
 
-@app.route("/protected")
-@token_required
-def protected_route():
-    return jsonify({"message": f"Hello, {current_user.full_name}. This is a protected route."})
+# ---------------------------------------------------------------------------
+# Example protected route
+# ---------------------------------------------------------------------------
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return jsonify(
+        {
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "role": current_user.role,
+        }
+    )
 
 
+# ---------------------------------------------------------------------------
+# Logout endpoint
+# ---------------------------------------------------------------------------
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
-    return jsonify({"message": "Logged out successfully"})
+    return jsonify({"message": "Logged out successfully"}), 200
 
 
+# ---------------------------------------------------------------------------
+# Run the application
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True)

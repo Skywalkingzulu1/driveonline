@@ -4,7 +4,7 @@ import re
 from functools import wraps
 
 import jwt
-from flask import Flask, request, jsonify, redirect, url_for, render_template_string
+from flask import Flask, request, jsonify, redirect, url_for, render_template_string, send_from_directory
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -20,7 +20,11 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 # ---------------------------------------------------------------------------
 # Flask application setup
 # ---------------------------------------------------------------------------
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    static_folder=".",  # Serve static files (style.css, etc.) from project root
+    template_folder=".",  # Serve HTML files from project root
+)
 
 # Configuration
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "super-secret-key")
@@ -91,101 +95,187 @@ def load_user(user_id):
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
+def generate_jwt(email: str) -> str:
+    """Create a JWT for the given email."""
+    payload = {
+        "sub": email,
+        "iat": datetime.datetime.utcnow(),
+        "exp": datetime.datetime.utcnow()
+        + datetime.timedelta(seconds=app.config["JWT_EXP_DELTA_SECONDS"]),
+    }
+    token = jwt.encode(
+        payload,
+        app.config["JWT_SECRET_KEY"],
+        algorithm=app.config["JWT_ALGORITHM"],
+    )
+    # PyJWT returns bytes in older versions; ensure string
+    return token if isinstance(token, str) else token.decode("utf-8")
 
-def send_reset_email(to_email, token):
-    """Send password‑reset email containing a verification link."""
-    reset_url = url_for('reset_password', token=token, _external=True)
-    html = render_template_string('''
-        <p>Hello,</p>
-        <p>You requested a password reset. Click the link below to set a new password:</p>
-        <p><a href="{{ reset_url }}">{{ reset_url }}</a></p>
-        <p>If you did not request this, please ignore this email.</p>
-    ''', reset_url=reset_url)
 
-    msg = Message(subject="Password Reset Request",
-                  recipients=[to_email],
-                  html=html)
-    mail.send(msg)
-
-
-# ---------------------------------------------------------------------------
-# Routes for password reset
-# ---------------------------------------------------------------------------
-
-@app.route('/reset_password_request', methods=['GET', 'POST'])
-def reset_password_request():
-    """Render a form to request a password reset and handle its submission."""
-    if request.method == 'GET':
-        return render_template_string('''
-            <h2>Reset Password</h2>
-            <form method="post">
-                <label for="email">Enter your email address:</label><br>
-                <input type="email" id="email" name="email" required><br><br>
-                <button type="submit">Send Reset Link</button>
-            </form>
-        ''')
-
-    # POST handling
-    email = request.form.get('email')
-    if not email or email not in users_db:
-        # For security, do not reveal whether the email exists.
-        return jsonify({"message": "If the email is registered, a reset link will be sent."}), 200
-
-    # Generate a time‑limited token (valid for 1 hour)
-    token = serializer.dumps(email, salt='password-reset-salt')
+def verify_jwt(token: str) -> dict | None:
+    """Validate a JWT and return its payload, or None if invalid."""
     try:
-        send_reset_email(email, token)
-    except Exception as e:
-        # In production you would log the exception.
-        return jsonify({"error": "Failed to send email."}), 500
+        payload = jwt.decode(
+            token,
+            app.config["JWT_SECRET_KEY"],
+            algorithms=[app.config["JWT_ALGORITHM"]],
+        )
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
 
-    return jsonify({"message": "If the email is registered, a reset link will be sent."}), 200
 
+def token_required(f):
+    """Decorator to protect routes with JWT authentication."""
 
-@app.route('/reset_password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
-    """Validate token and allow the user to set a new password."""
-    try:
-        email = serializer.loads(token, salt='password-reset-salt', max_age=3600)
-    except SignatureExpired:
-        return render_template_string('<p>The reset link has expired.</p>'), 400
-    except BadSignature:
-        return render_template_string('<p>Invalid reset link.</p>'), 400
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", None)
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"msg": "Missing or invalid Authorization header"}), 401
+        token = auth_header.split()[1]
+        payload = verify_jwt(token)
+        if not payload:
+            return jsonify({"msg": "Invalid or expired token"}), 401
+        # Attach user email to request context
+        request.user_email = payload["sub"]
+        return f(*args, **kwargs)
 
-    if request.method == 'GET':
-        return render_template_string('''
-            <h2>Set New Password</h2>
-            <form method="post">
-                <label for="password">New Password:</label><br>
-                <input type="password" id="password" name="password" required><br><br>
-                <label for="confirm">Confirm Password:</label><br>
-                <input type="password" id="confirm" name="confirm" required><br><br>
-                <button type="submit">Reset Password</button>
-            </form>
-        ''')
-
-    # POST handling – update password
-    password = request.form.get('password')
-    confirm = request.form.get('confirm')
-    if not password or not confirm or password != confirm:
-        return render_template_string('<p>Passwords do not match.</p>'), 400
-
-    # Hash the new password and store it
-    hashed = bcrypt.generate_password_hash(password).decode('utf-8')
-    users_db[email]['hashed_password'] = hashed
-
-    return render_template_string('<p>Password has been reset successfully.</p>'), 200
+    return decorated
 
 
 # ---------------------------------------------------------------------------
-# Example placeholder routes (login, register, etc.)
+# Routes
 # ---------------------------------------------------------------------------
-
-@app.route('/')
+@app.route("/")
 def home():
-    return render_template_string('<h1>Welcome to Drive Online</h1>')
+    """Serve the main dashboard page."""
+    try:
+        with open("index.html", "r", encoding="utf-8") as f:
+            html = f.read()
+        return render_template_string(html)
+    except FileNotFoundError:
+        return "<h1>Index page not found</h1>", 404
 
-# The rest of your existing routes (login, register, etc.) would follow here.
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    """Serve static assets like CSS."""
+    return send_from_directory(".", filename)
+
+
+# ----- Registration ---------------------------------------------------------
+@app.route("/api/register", methods=["POST"])
+def register():
+    """
+    Expected JSON payload:
+    {
+        "email": "user@example.com",
+        "password": "plain-text",
+        "full_name": "John Doe"
+    }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"msg": "Missing JSON payload"}), 400
+
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+    full_name = data.get("full_name", "").strip()
+
+    if not email or not password or not full_name:
+        return jsonify({"msg": "Email, password and full_name are required"}), 400
+
+    if email in users_db:
+        return jsonify({"msg": "User already exists"}), 409
+
+    hashed = bcrypt.generate_password_hash(password)
+    users_db[email] = {
+        "hashed_password": hashed,
+        "full_name": full_name,
+        "is_verified": False,
+        "role": "user",
+    }
+
+    # In a real app, send verification email here.
+    return jsonify({"msg": "User registered successfully"}), 201
+
+
+# ----- Login ---------------------------------------------------------------
+@app.route("/api/login", methods=["POST"])
+def login():
+    """
+    Expected JSON payload:
+    {
+        "email": "user@example.com",
+        "password": "plain-text"
+    }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"msg": "Missing JSON payload"}), 400
+
+    email = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+
+    user_record = users_db.get(email)
+    if not user_record:
+        return jsonify({"msg": "Invalid credentials"}), 401
+
+    if not bcrypt.check_password_hash(user_record["hashed_password"], password):
+        return jsonify({"msg": "Invalid credentials"}), 401
+
+    user = User(email)
+    login_user(user)
+
+    token = generate_jwt(email)
+    return jsonify({"access_token": token, "msg": "Login successful"}), 200
+
+
+# ----- Logout ---------------------------------------------------------------
+@app.route("/api/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({"msg": "Logged out"}), 200
+
+
+# ----- Protected example ----------------------------------------------------
+@app.route("/api/profile", methods=["GET"])
+@token_required
+def profile():
+    email = request.user_email
+    user = users_db.get(email)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+    return jsonify(
+        {
+            "email": email,
+            "full_name": user.get("full_name"),
+            "role": user.get("role"),
+            "is_verified": user.get("is_verified"),
+        }
+    ), 200
+
+
+# ---------------------------------------------------------------------------
+# Error handlers
+# ---------------------------------------------------------------------------
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"msg": "Resource not found"}), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({"msg": "Internal server error"}), 500
+
+
+# ---------------------------------------------------------------------------
+# Run the application
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    # Enable debug mode only in development
+    app.run(host="0.0.0.0", port=5000, debug=True)

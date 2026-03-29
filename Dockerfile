@@ -1,27 +1,33 @@
-# Use an official lightweight Python image.
 FROM python:3.11-slim
 
-# Set environment variables.
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Set work directory.
+# Install system dependencies (if any)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create working directory
 WORKDIR /app
 
-# Install system dependencies (if any) and then Python dependencies.
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code.
+# Copy application code
 COPY . .
 
-# Expose the port Flask will run on.
+# Expose Flask default port
 EXPOSE 5000
 
-# Define environment variables for Flask.
+# Set Flask environment variables
 ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=5000
 
-# Use Gunicorn to serve the Flask app.
-CMD ["gunicorn", "--workers=4", "--bind", "0.0.0.0:5000", "app:app"]
+# Run the Flask application
+CMD ["flask", "run"]

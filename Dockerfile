@@ -1,38 +1,42 @@
-# Use an official lightweight Python image.
-FROM python:3.11-slim
+# Use the official lightweight Python image.
+FROM python:3.12-slim
 
-# Set environment variables for Python.
+# Set environment variables.
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Set working directory.
-WORKDIR /app
-
-# Install system dependencies (if any are needed for building packages).
-# For this project, most packages are pure Python, but we include build-essential
-# to be safe for any compiled dependencies.
+# Install system dependencies.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies.
+# Create a non-root user to run the app.
+RUN useradd -m appuser
+WORKDIR /app
+
+# Copy only requirements first to leverage Docker cache.
 COPY requirements.txt .
+
+# Install Python dependencies.
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy the application source code.
+# Copy the rest of the application code.
 COPY . .
 
-# Set environment variables for Flask and Gunicorn.
-# These can be overridden at runtime.
+# Change ownership to the non-root user.
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user.
+USER appuser
+
+# Expose the default Flask port.
+EXPOSE 5000
+
+# Set Flask environment variables (optional, can be overridden at runtime).
 ENV FLASK_APP=app.py
-ENV FLASK_ENV=production
-ENV PORT=8000
-ENV HOST=0.0.0.0
+ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_RUN_PORT=5000
 
-# Expose the port that the app will run on.
-EXPOSE 8000
-
-# Use Gunicorn as the production-ready web server.
-# Adjust the number of workers as needed (here we use 4 workers).
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app"]
+# Use Flask's built-in server for simplicity. In production, replace with a WSGI server like gunicorn.
+CMD ["flask", "run"]

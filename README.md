@@ -120,101 +120,51 @@ The app will be reachable at `http://localhost:8000`.
 
 ```dockerfile
 # Use official Python runtime as a parent image
-FROM python:3.11-slim
-
-# Set working directory
-WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
-COPY . .
-
-# Expose the port Flask runs on
-EXPOSE 8000
-
-# Set environment variables (can be overridden at runtime)
-ENV FLASK_APP=app.py
-ENV FLASK_RUN_HOST=0.0.0.0
-ENV FLASK_RUN_PORT=8000
-
-# Run the application
-CMD ["flask", "run"]
+FROM 
 ```
 
 ---
 
 ## Environment Configuration
 
-Create a `.env` file in the project root (or set the variables in your deployment environment). Example:
+The application relies on several environment variables. Below is a minimal `.env` example:
 
 ```dotenv
-# Core secrets
+# Flask secret keys
 SECRET_KEY=super-secret-key
 JWT_SECRET_KEY=jwt-super-secret
 
-# JWT settings
-JWT_ALGORITHM=HS256
-JWT_EXP_DELTA_SECONDS=3600
-
-# Flask-Mail (using MailHog for local testing)
-MAIL_SERVER=localhost
+# Flask‑Mail configuration (example using MailHog)
+MAIL_SERVER=mailhog
 MAIL_PORT=1025
 MAIL_USERNAME=
 MAIL_PASSWORD=
-MAIL_USE_TLS=false
-MAIL_USE_SSL=false
 MAIL_DEFAULT_SENDER=no-reply@example.com
+
+# AWS credentials (required for any AWS integrations)
+AWS_ACCESS_KEY_ID=YOUR_AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_ACCESS_KEY
 ```
 
-**Important:** Never commit real secrets to version control. Use a secret manager in production.
+**Important:**  
+- Do **not** commit the `.env` file or any secret values to version control.  
+- When deploying via GitHub Actions, store `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as **encrypted repository secrets**.  
+- A helper script `set_github_secrets.sh` is provided to automate adding these secrets to the repository using the GitHub CLI.
 
 ---
 
 ## API Documentation
 
-| Endpoint | Method | Description | Authentication |
-|----------|--------|-------------|----------------|
-| `/register` | `POST` | Register a new user (email, password, full_name). Sends verification email. | No |
-| `/login` | `POST` | Authenticate user, returns JWT token. | No |
-| `/verify/<token>` | `GET` | Verify email address using token from email. | No |
-| `/jobs` | `GET` | Retrieve list of job listings (static JSON in front‑end). | Optional (JWT can be added later) |
-| `/protected` | `GET` | Example protected route – requires valid JWT. | Yes (Bearer token) |
-
-*All responses are JSON formatted.*
+*(Documentation placeholder – add your API specs here.)*
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Follow these steps:
-
-1. Fork the repository.
-2. Create a feature branch:
-
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-3. Make your changes and ensure tests pass:
-
-   ```bash
-   pytest
-   ```
-
-4. Commit and push your changes.
-5. Open a Pull Request describing the changes.
-
-### Code Style
-
-- Use **PEP 8** conventions.
-- Run `flake8` before committing.
-- Keep the `requirements.txt` up‑to‑date (`pip freeze > requirements.txt`).
+Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request.
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License** – see the `LICENSE` file for details.
+MIT License. See `LICENSE` file for details.

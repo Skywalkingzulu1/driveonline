@@ -1,42 +1,23 @@
-# Use the official lightweight Python image.
-# Alpine is small but may require extra build tools for some packages.
-# Here we use Debian-slim for broader compatibility.
-FROM python:3.12-slim
+# Use an official lightweight Python image.
+FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Install system dependencies
-# gcc and libpq-dev are often needed for building packages like bcrypt.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create a non-root user to run the app
-RUN useradd -m appuser
+# Set working directory inside the container.
 WORKDIR /app
 
-# Copy only requirements first to leverage Docker cache
+# Install application dependencies.
 COPY requirements.txt .
+# Install both the listed requirements and gunicorn for production serving.
+RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-# Install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application code
+# Copy the rest of the application code.
 COPY . .
 
-# Ensure the static files are accessible
-# (Flask is configured to serve from the project root, so no extra steps needed)
+# Expose the port that the application will run on.
+EXPOSE 8000
 
-# Expose the default Flask port
-EXPOSE 5000
+# Define environment variables (optional defaults).
+ENV FLASK_APP=app.py
+ENV PORT=8000
 
-# Switch to non-root user
-USER appuser
-
-# Define the default command to run the Flask app.
-# Using gunicorn for production readiness.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Run the Flask app with Gunicorn (4 workers, bind to all interfaces).
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app"]

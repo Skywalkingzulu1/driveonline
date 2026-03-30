@@ -1,31 +1,28 @@
-# Use the official Python runtime as a parent image
+# Use official Python runtime as a parent image
 FROM python:3.11-slim
 
-# Set environment variables for Python
+# Prevent Python from writing .pyc files and enable unbuffered output
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies required for building some Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (if any)
-RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
-    rm -rf /var/lib/apt/lists/*
-
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt && \
+    pip install gunicorn
 
-# Copy application source code
+# Copy the rest of the application code
 COPY . .
 
-# Expose the port the app runs on (as documented in README)
+# Expose the port that gunicorn will listen on
 EXPOSE 8000
 
-# Set Flask environment variables
-ENV FLASK_APP=app.py
-ENV FLASK_RUN_HOST=0.0.0.0
-ENV FLASK_RUN_PORT=8000
-
-# Run the Flask application
-CMD ["flask", "run", "--host=0.0.0.0", "--port=8000"]
+# Command to run the application with gunicorn in production mode
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:8000", "app:app"]

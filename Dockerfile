@@ -1,26 +1,24 @@
-# Use official Python runtime as a parent image
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install build dependencies (gcc) required for some packages
-RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements and install Python dependencies
+# Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Copy application code
 COPY . .
 
-# Expose the port the Flask app runs on
-EXPOSE 8000
-
-# Set environment variables for Flask
+# Flask configuration
 ENV FLASK_APP=app.py
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=8000
 
-# Use Flask's built‑in development server (suitable for this lightweight app)
+EXPOSE 8000
+
+# Healthcheck that calls the /api/health endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/api/health || exit 1
+
+# Start the Flask application
 CMD ["flask", "run"]

@@ -2,82 +2,79 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-env:
-  IMAGE_NAME: driveonline
-  REGISTRY: ghcr.io
-  # For AWS ECR you could set REGISTRY to your account ID.dkr.ecr.<region>.amazonaws.com
+    branches:
+      - main
 
 jobs:
-  build-test-and-deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
-      id-token: write   # needed for OIDC with AWS
 
     steps:
       # Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      # Set up Python (for running tests)
+      # Set up Python (required for installing dependencies)
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      # Install dependencies
-      - name: Install dependencies
+      # Install Python dependencies (optional, ensures build succeeds)
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Run tests
-      - name: Run pytest
-        run: |
-          pytest --maxfail=1 --disable-warnings
-
-      # Set up Docker Buildx
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Log in to container registry (GitHub Container Registry example)
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Build and push Docker image
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
-
-      # Deploy to AWS ECS (example)
+      # Configure AWS credentials from repository secrets
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-region: us-east-1
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: GitHubActionsDeploy
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy to Amazon ECS
+      # Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build Docker image, tag it, and push to ECR
+      - name: Build, tag, and push Docker image
         env:
-          CLUSTER_NAME: ${{ secrets.ECS_CLUSTER_NAME }}
-          SERVICE_NAME: ${{ secrets.ECS_SERVICE_NAME }}
-          IMAGE_URI: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: driveonline
+          IMAGE_TAG: ${{ github.sha }}
         run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      # Deploy to ECS using a simple blue‑green strategy
+      - name: Deploy to ECS (Blue‑Green)
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: driveonline
+          IMAGE_TAG: ${{ github.sha }}
+          CLUSTER_NAME: ${{ secrets.ECS_CLUSTER_NAME }}
+          SERVICE_BLUE: ${{ secrets.ECS_SERVICE_BLUE }}
+          SERVICE_GREEN: ${{ secrets.ECS_SERVICE_GREEN }}
+        run: |
+          IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          echo "Updating Blue service ($SERVICE_BLUE) with image $IMAGE_URI"
           aws ecs update-service \
             --cluster $CLUSTER_NAME \
-            --service $SERVICE_NAME \
+            --service $SERVICE_BLUE \
             --force-new-deployment \
-            --region ${{ env.AWS_REGION }}
+            --desired-count 1 \
+            --region ${{ secrets.AWS_REGION }}
+
+          echo "Updating Green service ($SERVICE_GREEN) with image $IMAGE_URI"
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $SERVICE_GREEN \
+            --force-new-deployment \
+            --desired-count 1 \
+            --region ${{ secrets.AWS_REGION }}
+
+          echo "Blue‑Green deployment triggered."

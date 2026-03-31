@@ -1,0 +1,33 @@
+version: 0.0
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: "TaskDefinition"
+        LoadBalancerInfo:
+          ContainerName: "app"
+          ContainerPort: 5000
+        DeploymentGroupName: "DriveOnlineDeploymentGroup"
+        PlatformVersion: "LATEST"
+        NetworkConfiguration:
+          AwsvpcConfiguration:
+            Subnets:
+              - "<subnet-1>"
+              - "<subnet-2>"
+            SecurityGroups:
+              - "<security-group-id>"
+            AssignPublicIp: "ENABLED"
+
+hooks:
+  BeforeInstall:
+    - location: scripts/before_install.sh
+      timeout: 300
+  AfterInstall:
+    - location: scripts/after_install.sh
+      timeout: 300
+  ApplicationStart:
+    - location: scripts/start_service.sh
+      timeout: 300
+  ValidateService:
+    - location: scripts/validate_service.sh
+      timeout: 300

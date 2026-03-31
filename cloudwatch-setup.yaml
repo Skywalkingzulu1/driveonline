@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch Alarms for DriveOnline blue and green environments
+Resources:
+  # CPU Utilization Alarms
+  BlueCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: driveonline-blue-cpu-high
+      AlarmDescription: CPU utilization > 80% for 5 minutes (Blue)
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: Environment
+          Value: blue
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+
+  GreenCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: driveonline-green-cpu-high
+      AlarmDescription: CPU utilization > 80% for 5 minutes (Green)
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: Environment
+          Value: green
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+
+  # Request Latency Alarms (custom metric)
+  BlueLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: driveonline-blue-latency-high
+      AlarmDescription: Average request latency > 2000ms over 5 minutes (Blue)
+      Namespace: DriveOnline/Application
+      MetricName: RequestLatency
+      Dimensions:
+        - Name: Environment
+          Value: blue
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+
+  GreenLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: driveonline-green-latency-high
+      AlarmDescription: Average request latency > 2000ms over 5 minutes (Green)
+      Namespace: DriveOnline/Application
+      MetricName: RequestLatency
+      Dimensions:
+        - Name: Environment
+          Value: green
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: []
+
+  # Error Rate Alarms (custom metric for 5xx responses)
+  BlueErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: driveonline-blue-5xx-errors
+      AlarmDescription: 5xx error count > 5 in 5 minutes (Blue)
+      Namespace: DriveOnline/Application
+      MetricName: ResponseStatus
+      Dimensions:
+        - Name: Environment
+          Value: blue
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: []
+
+  GreenErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: driveonline-green-5xx-errors
+      AlarmDescription: 5xx error count > 5 in 5 minutes (Green)
+      Namespace: DriveOnline/Application
+      MetricName: ResponseStatus
+      Dimensions:
+        - Name: Environment
+          Value: green
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: []
+
+Outputs:
+  BlueCPUAlarmArn:
+    Description: ARN of the Blue CPU alarm
+    Value: !Ref BlueCPUAlarm
+  GreenCPUAlarmArn:
+    Description: ARN of the Green CPU alarm
+    Value: !Ref GreenCPUAlarm

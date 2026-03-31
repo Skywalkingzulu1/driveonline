@@ -1,29 +1,28 @@
+# Use official Python runtime as a parent image
 FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install build dependencies
+# Install system dependencies (if any)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application source code
 COPY . .
 
-# Build-time arguments for secrets and configuration
-ARG SECRET_KEY
-ARG JWT_SECRET_KEY
-ARG STRIPE_SECRET_KEY
-ARG DB_CONNECTION_STRING
+# Expose the port Flask will run on
+EXPOSE 5000
 
-# Set environment variables at runtime
-ENV SECRET_KEY=${SECRET_KEY}
-ENV JWT_SECRET_KEY=${JWT_SECRET_KEY}
-ENV STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-ENV DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+# Set environment variables for Flask
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+ENV FLASK_ENV=production
 
-# Expose the port the app runs on (Flask default 8000 in CI)
-EXPOSE 8000
-
-# Use gunicorn to serve the Flask app
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app"]
+# Run the Flask application
+CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]

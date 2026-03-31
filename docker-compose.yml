@@ -1,7 +1,32 @@
 version: "3.9"
 
 services:
-  driveonline:
-    build:
-      context: .
-      docker
+  web:
+    build: .
+    container_name: driveonline_web
+    ports:
+      - "8000:5000"
+    environment:
+      - SECRET_KEY=super-secret-key
+      - JWT_SECRET_KEY=jwt-super-secret
+      - SECURITY_PASSWORD_SALT=email-salt
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/driveonline
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+
+  db:
+    image: postgres:15-alpine
+    container_name: driveonline_db
+    environment:
+      POSTGRES_USER=postgres
+      POSTGRES_PASSWORD=postgres
+      POSTGRES_DB=driveonline
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

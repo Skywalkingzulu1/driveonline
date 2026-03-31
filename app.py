@@ -1,19 +1,31 @@
 import os
-import jwt
 import datetime
 import logging
 from functools import wraps
+from typing import Callable, Any, Dict
+
+import jwt
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from flask import Flask, jsonify, request, abort, g
+from flask import (
+    Flask,
+    jsonify,
+    request,
+    abort,
+)
 from flask_bcrypt import Bcrypt
 
-# Optional AWS SDK for Parameter Store and CloudWatch
+# Optional AWS SDK for Parameter Store (kept for compatibility)
 try:
     import boto3
     from botocore.exceptions import BotoCoreError, ClientError
 except ImportError:  # pragma: no cover
     boto3 = None
     BotoCoreError = ClientError = Exception
+
+# ---------------------------------------------------------------------------
+# Local imports
+# ---------------------------------------------------------------------------
+import db  # SQLAlchemy integration for PostgreSQL / SQLite fallback (now a minimal stub)
 
 # ---------------------------------------------------------------------------
 # Flask application setup
@@ -32,9 +44,7 @@ bcrypt = Bcrypt(app)
 # ---------------------------------------------------------------------------
 
 def _get_ssm_client():
-    """Create a boto3 SSM client if boto3 is available.
-    The client will automatically use the IAM role attached to the instance/container.
-    """
+    """Create a boto3 SSM client if boto3 is available."""
     if boto3 is None:
         return None
     try:
@@ -46,9 +56,7 @@ _ssm_client = _get_ssm_client()
 
 
 def _fetch_parameter(name: str) -> str | None:
-    """Fetch a parameter from AWS Parameter Store.
-    Returns the parameter value as a string, or None if it cannot be retrieved.
-    """
+    """Fetch a parameter from AWS Parameter Store."""
     if _ssm_client is None:
         return None
     try:
@@ -59,21 +67,13 @@ def _fetch_parameter(name: str) -> str | None:
 
 
 def get_config(key: str, default: str | None = None) -> str | None:
-    """Retrieve configuration value.
-    Order of precedence:
-    1. Environment variable
-    2. AWS Parameter Store (parameter name matches the key)
-    3. Provided default
-    """
-    # 1. Environment variable
+    """Retrieve configuration value from env, then Parameter Store, then default."""
     value = os.getenv(key)
     if value:
         return value
-    # 2. Parameter Store
     value = _fetch_parameter(key)
     if value:
         return value
-    # 3. Default
     return default
 
 # Application configuration
@@ -81,13 +81,12 @@ app.config["SECRET_KEY"] = get_config("SECRET_KEY", "super-secret-key")
 app.config["JWT_SECRET_KEY"] = get_config("JWT_SECRET_KEY", "jwt-super-secret")
 app.config["JWT_ALGORITHM"] = "HS256"
 app.config["JWT_EXP_DELTA_SECONDS"] = 3600  # 1 hour
-app.config["SECURITY_PASSWORD_SALT"] = get_config("SECURITY_PASSWORD_SALT", "email-salt")
+app.config["SECURITY_PASSWORD_SALT"] = get_config(
+    "SECURITY_PASSWORD_SALT", "email-salt"
+)
 
-# Determine deployment environment (blue/green). Default to 'blue' if not set.
-DEPLOYMENT_ENV = os.getenv("DEPLOYMENT_ENV", "blue").lower()
-
-# In‑memory user store: email -> {password_hash, is_verified}
-users = {}
+# In‑memory user store: email -> {password_hash: str, is_verified: bool}
+users: Dict[str, Dict[str, Any]] = {}
 
 # Serializer for email verification tokens
 email_serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
@@ -96,33 +95,44 @@ email_serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 # Helper functions
 # ---------------------------------------------------------------------------
 
-def generate_jwt(email: str) -> str:
-    """Generate a JWT token for the given email."""
-    payload = {
-        "email": email,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(seconds=app.config["JWT_EXP_DELTA_SECONDS"])
-    }
-    token = jwt.encode(payload, app.config["JWT_SECRET_KEY"], algorithm=app.config["JWT_ALGORITHM"])
-    return token
+def generate_verification_token(email: str) -> str:
+    """Create a time‑limited token for email verification."""
+    return email_serializer.dumps(email, salt=app.config["SECURITY_PASSWORD_SALT"])
 
-def token_required(f):
-    """Decorator to protect routes with JWT authentication."""
+
+def confirm_verification_token(token: str, expiration: int = 3600) -> str:
+    """Validate a verification token and return the embedded email.
+
+    Raises:
+        SignatureExpired: token is valid but expired.
+        BadSignature: token is invalid.
+    """
+    return email_serializer.loads(
+        token,
+        salt=app.config["SECURITY_PASSWORD_SALT"],
+        max_age=expiration,
+    )
+
+
+def token_required(f: Callable) -> Callable:
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
-        # JWT can be passed in the Authorization header as Bearer token
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header.split(" ", 1)[1]
-        if not token:
-            return jsonify({"message": "Token is missing!"}), 401
+        auth_header = request.headers.get('Authorization', None)
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"message": "Missing or invalid Authorization header"}), 401
+        token = auth_header.split(' ')[1]
         try:
-            data = jwt.decode(token, app.config["JWT_SECRET_KEY"], algorithms=[app.config["JWT_ALGORITHM"]])
-            g.current_user = data["email"]
+            payload = jwt.decode(
+                token,
+                app.config["JWT_SECRET_KEY"],
+                algorithms=[app.config["JWT_ALGORITHM"]],
+            )
         except jwt.ExpiredSignatureError:
-            return jsonify({"message": "Token has expired!"}), 401
+            return jsonify({"message": "Token has expired"}), 401
         except jwt.InvalidTokenError:
-            return jsonify({"message": "Invalid token!"}), 401
+            return jsonify({"message": "Invalid token"}), 401
+        # Attach user info to request context if needed
+        request.user = payload.get('sub')
         return f(*args, **kwargs)
     return decorated
 
@@ -130,91 +140,81 @@ def token_required(f):
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.route("/", methods=["GET"])
-def health_check():
-    """Simple health check endpoint."""
-    return jsonify({"status": "ok", "environment": DEPLOYMENT_ENV}), 200
-
-@app.route("/register", methods=["POST"])
+@app.route('/register', methods=['POST'])
 def register():
-    """
-    Register a new user.
-    Expected JSON payload: {"email": "...", "password": "..."}
-    """
     data = request.get_json()
-    if not data or not data.get("email") or not data.get("password"):
-        return jsonify({"message": "Email and password required"}), 400
-
-    email = data["email"].strip().lower()
+    if not data:
+        return jsonify({"message": "Invalid JSON payload"}), 400
+    email = data.get('email')
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({"message": "Email and password are required"}), 400
     if email in users:
         return jsonify({"message": "User already exists"}), 400
+    pw_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+    users[email] = {"password_hash": pw_hash, "is_verified": False}
+    token = generate_verification_token(email)
+    # In a real app we would email this token. Here we just return it.
+    return jsonify({"message": "User registered. Verify email.", "verification_token": token}), 201
 
-    password_hash = bcrypt.generate_password_hash(data["password"]).decode("utf-8")
-    users[email] = {"password_hash": password_hash, "is_verified": False}
-
-    # Generate verification token
-    token = email_serializer.dumps(email, salt=app.config["SECURITY_PASSWORD_SALT"])
-    verification_url = f"{request.host_url}verify/{token}"
-    # In a real app you would send this URL via email.
-    # For this simplified version we just return it.
-    return jsonify({"message": "User registered. Verify email.", "verification_url": verification_url}), 201
-
-@app.route("/verify/<token>", methods=["GET"])
-def verify_email(token):
-    """Verify a user's email using the token."""
+@app.route('/verify/<token>', methods=['GET'])
+def verify_email(token: str):
     try:
-        email = email_serializer.loads(
-            token,
-            salt=app.config["SECURITY_PASSWORD_SALT"],
-            max_age=3600  # 1 hour validity
-        )
+        email = confirm_verification_token(token)
     except SignatureExpired:
         return jsonify({"message": "Verification link expired"}), 400
     except BadSignature:
         return jsonify({"message": "Invalid verification token"}), 400
-
     user = users.get(email)
     if not user:
         return jsonify({"message": "User not found"}), 404
-
+    if user["is_verified"]:
+        return jsonify({"message": "User already verified"}), 200
     user["is_verified"] = True
     return jsonify({"message": "Email verified successfully"}), 200
 
-@app.route("/login", methods=["POST"])
+@app.route('/login', methods=['POST'])
 def login():
-    """
-    Authenticate a user and return a JWT.
-    Expected JSON payload: {"email": "...", "password": "..."}
-    """
     data = request.get_json()
-    if not data or not data.get("email") or not data.get("password"):
-        return jsonify({"message": "Email and password required"}), 400
-
-    email = data["email"].strip().lower()
+    if not data:
+        return jsonify({"message": "Invalid JSON payload"}), 400
+    email = data.get('email')
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({"message": "Email and password are required"}), 400
     user = users.get(email)
     if not user:
         return jsonify({"message": "Invalid credentials"}), 401
-
-    if not bcrypt.check_password_hash(user["password_hash"], data["password"]):
-        return jsonify({"message": "Invalid credentials"}), 401
-
-    if not user.get("is_verified"):
+    if not user["is_verified"]:
         return jsonify({"message": "Email not verified"}), 403
+    if not bcrypt.check_password_hash(user["password_hash"], password):
+        return jsonify({"message": "Invalid credentials"}), 401
+    payload = {
+        "sub": email,
+        "iat": datetime.datetime.utcnow(),
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(seconds=app.config["JWT_EXP_DELTA_SECONDS"]),
+    }
+    token = jwt.encode(payload, app.config["JWT_SECRET_KEY"], algorithm=app.config["JWT_ALGORITHM"])
+    return jsonify({"access_token": token}), 200
 
-    token = generate_jwt(email)
-    return jsonify({"token": token}), 200
-
-@app.route("/protected", methods=["GET"])
+# Example protected route
+@app.route('/protected', methods=['GET'])
 @token_required
 def protected():
-    """Example protected endpoint."""
-    return jsonify({"message": f"Hello, {g.current_user}! This is a protected route."}), 200
+    return jsonify({"message": f"Hello, {request.user}! This is a protected endpoint."}), 200
+
+# ---------------------------------------------------------------------------
+# Root endpoint – serve the static index.html for convenience
+# ---------------------------------------------------------------------------
+
+@app.route('/')
+def root():
+    return app.send_static_file('index.html')
 
 # ---------------------------------------------------------------------------
 # Application entry point
 # ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    # Enable debug mode if FLASK_ENV is set to development
-    debug = os.getenv("FLASK_ENV") == "development"
-    app.run(host="0.0.0.0", port=5000, debug=debug)
+if __name__ == '__main__':
+    # Enable simple logging for debugging
+    logging.basicConfig(level=logging.INFO)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8000)), debug=True)

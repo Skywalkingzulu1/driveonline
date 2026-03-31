@@ -1,0 +1,22 @@
+{
+    "mission": "Drive Online",
+    "description": "Initial deployment manifest for the Drive Online web application.",
+    "version": "1.0.0",
+    "components": [
+        "app.py",
+        "index.html",
+        "style.css",
+        "README.md",
+        "requirements.txt"
+    ],
+    "environment": {
+        "SECRET_KEY": "super-secret-key",
+        "JWT_SECRET_KEY": "jwt-super-secret",
+        "SECURITY_PASSWORD_SALT": "email-salt"
+    },
+    "author": {
+        "name": "Andile Sizophila Mchunu",
+        "email": "andilexmchunu@gmail.com",
+        "github": "Skywalkingzulu1"
+    }
+}

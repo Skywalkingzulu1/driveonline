@@ -175,27 +175,9 @@ body{
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: #fff;
+    background: #fff;
     padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-}
-
-.close-btn {
-    margin-top: 10px;
-}
-
-.checkbox-group {
-    margin-bottom: 10px;
-}
-
-.checkbox-group input[type="checkbox"] {
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 5px;
-}
-
-.checkbox-group label {
-    display: inline-block;
-    vertical-align: middle;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
 }

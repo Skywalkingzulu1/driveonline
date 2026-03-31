@@ -1,24 +1,29 @@
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# Install dependencies
+# Install build dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
 
-# Flask configuration
-ENV FLASK_APP=app.py
-ENV FLASK_RUN_HOST=0.0.0.0
-ENV FLASK_RUN_PORT=8000
+# Build-time arguments for secrets and configuration
+ARG SECRET_KEY
+ARG JWT_SECRET_KEY
+ARG STRIPE_SECRET_KEY
+ARG DB_CONNECTION_STRING
 
+# Set environment variables at runtime
+ENV SECRET_KEY=${SECRET_KEY}
+ENV JWT_SECRET_KEY=${JWT_SECRET_KEY}
+ENV STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+ENV DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+
+# Expose the port the app runs on (Flask default 8000 in CI)
 EXPOSE 8000
 
-# Healthcheck that calls the /api/health endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8000/api/health || exit 1
-
-# Start the Flask application
-CMD ["flask", "run"]
+# Use gunicorn to serve the Flask app
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app"]

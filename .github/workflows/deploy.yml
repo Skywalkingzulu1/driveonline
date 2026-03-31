@@ -1,76 +1,46 @@
-name: Deploy to AWS ECS
+name: Production Deployment
 
 on:
   push:
-    branches: [ main ]
+    tags:
+      - 'v*'   # Trigger on version tags like v1.0.0
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
+    environment: production
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          python-version: '3.11'
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Install dependencies
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Register new task definition
-        env:
-          IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
-          TASK_FAMILY: ${{ secrets.ECS_TASK_FAMILY }}
+      - name: Build Docker image
         run: |
-          cat > task-def.json <<EOF
-          {
-            "family": "$TASK_FAMILY",
-            "networkMode": "awsvpc",
-            "requiresCompatibilities": ["FARGATE"],
-            "cpu": "256",
-            "memory": "512",
-            "executionRoleArn": "${{ secrets.ECS_EXECUTION_ROLE_ARN }}",
-            "taskRoleArn": "${{ secrets.ECS_TASK_ROLE_ARN }}",
-            "containerDefinitions": [
-              {
-                "name": "$TASK_FAMILY",
-                "image": "$IMAGE_URI",
-                "essential": true,
-                "portMappings": [
-                  {
-                    "containerPort": 5000,
-                    "protocol": "tcp"
-                  }
-                ]
-              }
-            ]
-          }
-          EOF
-          aws ecs register-task-definition --cli-input-json file://task-def.json
+          docker build -t driveonline:latest .
 
-      - name: Deploy to ECS service
+      - name: Deploy to Production
         env:
-          CLUSTER: ${{ secrets.ECS_CLUSTER }}
-          SERVICE: ${{ secrets.ECS_SERVICE }}
-          TASK_FAMILY: ${{ secrets.ECS_TASK_FAMILY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          SECURITY_PASSWORD_SALT: ${{ secrets.SECURITY_PASSWORD_SALT }}
         run: |
-          REVISION=$(aws ecs describe-task-definition --task-definition $TASK_FAMILY --query "taskDefinition.revision" --output text)
-          aws ecs update-service --cluster $CLUSTER --service $SERVICE --task-definition $TASK_FAMILY:$REVISION
+          # Example deployment command – replace with actual deployment logic
+          echo "Deploying to production..."
+          # e.g., docker push, kubectl apply, etc.
+
+      - name: Notify Slack on Success
+        if: success()
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: '{"text":"✅ Production deployment succeeded for tag ${{ github.ref_name }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
